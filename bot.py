@@ -7,6 +7,7 @@ import sqlite3
 import discord
 from discord import app_commands
 from discord.ext import commands
+import discord.ui
 
 # =========================
 # HTTP SERVER (Render)
@@ -120,11 +121,6 @@ async def on_ready():
     await bot.tree.sync()
     print(f"✅ Bot online como {bot.user}")
 
-
-intents = discord.Intents.default()
-intents.members = True
-intents.message_content = True
-
 # =========================
 # SALDO
 # =========================
@@ -138,23 +134,77 @@ async def saldo(interaction: discord.Interaction):
     )
 
 # =========================
-# LOJA
+# BOTÃO DA LOJA
+# =========================
+
+class ShopButton(discord.ui.Button):
+    def __init__(self, item, price):
+        super().__init__(
+            label=f"{item} - {price}",
+            style=discord.ButtonStyle.green
+        )
+        self.item = item
+        self.price = price
+
+    async def callback(self, interaction: discord.Interaction):
+
+        user_id = interaction.user.id
+        coins = get_coins(user_id)
+
+        if coins < self.price:
+            return await interaction.response.send_message(
+                "❌ Você não tem Staff Coins suficientes.",
+                ephemeral=True
+            )
+
+        remove_coins(user_id, self.price)
+
+        cursor.execute(
+            "INSERT INTO logs VALUES (?, ?, ?, ?, ?)",
+            (user_id, "COMPRA", self.item, self.price, str(datetime.now()))
+        )
+        conn.commit()
+
+        await interaction.response.send_message(
+            f"✅ Compra realizada!\n\n🏷️ {self.item}\n💰 {self.price} Coins",
+            ephemeral=True
+        )
+
+# =========================
+# VIEW DA LOJA
+# =========================
+
+class ShopView(discord.ui.View):
+    def __init__(self):
+        super().__init__(timeout=None)
+
+        cursor.execute("SELECT item, price FROM shop")
+        items = cursor.fetchall()
+
+        for item, price in items:
+            self.add_item(ShopButton(item, price))
+
+# =========================
+# LOJA (COM BOTÕES)
 # =========================
 
 @bot.tree.command(name="loja")
 async def loja(interaction: discord.Interaction):
-    cursor.execute("SELECT * FROM shop")
-    items = cursor.fetchall()
 
-    msg = "🛒 **LOJA STAFF**\n\n"
+    embed = discord.Embed(
+        title="🛒 LOJA STAFF",
+        description="Clique nos botões abaixo para comprar itens:",
+        color=discord.Color.green()
+    )
 
-    for item, price in items:
-        msg += f"• {item} — {price} Staff Coins\n"
-
-    await interaction.response.send_message(msg, ephemeral=True)
+    await interaction.response.send_message(
+        embed=embed,
+        view=ShopView(),
+        ephemeral=True
+    )
 
 # =========================
-# COMPRAR
+# COMPRAR (mantido)
 # =========================
 
 @bot.tree.command(name="comprar")
@@ -219,6 +269,30 @@ async def removemoedas(interaction: discord.Interaction, member: discord.Member,
         f"🗑️ {amount} moedas removidas de {member.mention}",
         ephemeral=True
     )
+
+# =========================
+# LOGS
+# =========================
+
+@bot.tree.command(name="logs")
+async def logs(interaction: discord.Interaction):
+
+    if not interaction.user.guild_permissions.administrator:
+        return await interaction.response.send_message("❌ Sem permissão.", ephemeral=True)
+
+    cursor.execute("SELECT user_id, item, price, time FROM logs ORDER BY time DESC LIMIT 10")
+    data = cursor.fetchall()
+
+    if not data:
+        return await interaction.response.send_message("📭 Nenhum log encontrado.", ephemeral=True)
+
+    msg = "📜 **ÚLTIMAS COMPRAS**\n\n"
+
+    for user_id, item, price, time in data:
+        user = await bot.fetch_user(user_id)
+        msg += f"👤 {user.name}\n🏷️ {item} - {price} Coins\n🕒 {time}\n\n"
+
+    await interaction.response.send_message(msg, ephemeral=True)
 
 # =========================
 # START BOT
