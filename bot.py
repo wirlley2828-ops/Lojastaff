@@ -218,7 +218,7 @@ Deseja confirmar a compra?
         await interaction.response.send_message(
             embed=embed,
             view=view,
-            ephemeral=True
+            ephemeral=False
         )
 
 # =========================
@@ -254,45 +254,7 @@ async def loja(interaction: discord.Interaction):
     await interaction.response.send_message(
         embed=embed,
         view=ShopView(),
-        ephemeral=True
-    )
-
-# =========================
-# COMPRAR (MANTIDO)
-# =========================
-
-@bot.tree.command(
-    name="comprar",
-    description="Comprar item manualmente"
-)
-@app_commands.describe(
-    item="Nome exato do item"
-)
-async def comprar(interaction: discord.Interaction, item: str):
-
-    cursor.execute("SELECT price FROM shop WHERE item=?", (item,))
-    result = cursor.fetchone()
-
-    if not result:
-        return await interaction.response.send_message("❌ Item não encontrado.", ephemeral=True)
-
-    price = result[0]
-    user_coins = get_coins(interaction.user.id)
-
-    if user_coins < price:
-        return await interaction.response.send_message("❌ Sem coins suficientes.", ephemeral=True)
-
-    remove_coins(interaction.user.id, price)
-
-    cursor.execute(
-        "INSERT INTO logs VALUES (?, ?, ?, ?, ?)",
-        (interaction.user.id, "COMPRA", item, price, str(datetime.now()))
-    )
-    conn.commit()
-
-    await interaction.response.send_message(
-        f"✅ Compra realizada!\n🏷️ {item}\n💰 {price}",
-        ephemeral=True
+        ephemeral=False
     )
 
 # =========================
@@ -312,7 +274,7 @@ async def addmoedas(interaction: discord.Interaction, member: discord.Member, am
 
     await interaction.response.send_message(
         f"✅ {amount} moedas adicionadas para {member.mention}",
-        ephemeral=True
+        ephemeral=False
     )
 
 # =========================
@@ -332,7 +294,7 @@ async def removemoedas(interaction: discord.Interaction, member: discord.Member,
 
     await interaction.response.send_message(
         f"🗑️ {amount} moedas removidas de {member.mention}",
-        ephemeral=True
+        ephemeral=False
     )
 
 # =========================
@@ -358,9 +320,9 @@ async def logs(interaction: discord.Interaction):
 
     for user_id, item, price, time in data:
         user = await bot.fetch_user(user_id)
-        msg += f"👤 {user.name}\n🏷️ {item} - {price}\n🕒 {time}\n\n"
+        msg += f"👤 {user.id}\n🏷️ {item} - {price}\n🕒 {time}\n\n"
 
-    await interaction.response.send_message(msg, ephemeral=True)
+    await interaction.response.send_message(msg, ephemeral=False)
 
 # =========================
 # START BOT
