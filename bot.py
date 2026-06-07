@@ -20,7 +20,7 @@ class Handler(BaseHTTPRequestHandler):
         self.wfile.write(b"Bot online!")
 
 def run_web():
-    port = int(os.environ.get("PORT", 10000))
+    port = int(os.environ.get("PORT"))
     server = HTTPServer(("0.0.0.0", port), Handler)
     server.serve_forever()
 
@@ -50,6 +50,38 @@ CREATE TABLE IF NOT EXISTS users (
     coins INTEGER DEFAULT 0
 )
 """)
+
+cursor.execute("""
+CREATE TABLE IF NOT EXISTS shop (
+    item TEXT,
+    price INTEGER
+)
+""")
+
+cursor.execute("""
+CREATE TABLE IF NOT EXISTS logs (
+    user_id INTEGER,
+    action TEXT,
+    item TEXT,
+    price INTEGER,
+    time TEXT
+)
+""")
+
+# =========================
+# LOJA PADRÃO
+# =========================
+
+default_items = [
+    ("Desafiante", 150),
+    ("Cargo Destaque (7 dias)", 500),
+    ("Cargo Personalizado (7 dias)", 800),
+    ("Avaliação Prioritária", 1500)
+]
+
+cursor.execute("SELECT COUNT(*) FROM shop")
+if cursor.fetchone()[0] == 0:
+    cursor.executemany("INSERT INTO shop VALUES (?, ?)", default_items)
 
 conn.commit()
 
@@ -97,6 +129,55 @@ async def saldo(interaction: discord.Interaction):
     coins = get_coins(interaction.user.id)
     await interaction.response.send_message(
         f"🪙 Você tem **{coins} Staff Coins**",
+        ephemeral=True
+    )
+
+# =========================
+# LOJA
+# =========================
+
+@bot.tree.command(name="loja")
+async def loja(interaction: discord.Interaction):
+    cursor.execute("SELECT * FROM shop")
+    items = cursor.fetchall()
+
+    msg = "🛒 **LOJA STAFF**\n\n"
+
+    for item, price in items:
+        msg += f"• {item} — {price} Staff Coins\n"
+
+    await interaction.response.send_message(msg, ephemeral=True)
+
+# =========================
+# COMPRAR
+# =========================
+
+@bot.tree.command(name="comprar")
+@app_commands.describe(item="Nome do item exatamente como na loja")
+async def comprar(interaction: discord.Interaction, item: str):
+
+    cursor.execute("SELECT price FROM shop WHERE item=?", (item,))
+    result = cursor.fetchone()
+
+    if not result:
+        return await interaction.response.send_message("❌ Item não encontrado na loja.", ephemeral=True)
+
+    price = result[0]
+    user_coins = get_coins(interaction.user.id)
+
+    if user_coins < price:
+        return await interaction.response.send_message("❌ Você não tem Staff Coins suficientes.", ephemeral=True)
+
+    remove_coins(interaction.user.id, price)
+
+    cursor.execute(
+        "INSERT INTO logs VALUES (?, ?, ?, ?, ?)",
+        (interaction.user.id, "COMPRA", item, price, str(datetime.now()))
+    )
+    conn.commit()
+
+    await interaction.response.send_message(
+        f"✅ Compra realizada!\n\n🏷️ Item: {item}\n💰 Preço: {price} Coins\n\nAguarde entrega manual da staff.",
         ephemeral=True
     )
 
