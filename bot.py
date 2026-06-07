@@ -125,7 +125,10 @@ async def on_ready():
 # SALDO
 # =========================
 
-@bot.tree.command(name="saldo")
+@bot.tree.command(
+    name="saldo",
+    description="Mostra suas Staff Coins"
+)
 async def saldo(interaction: discord.Interaction):
     coins = get_coins(interaction.user.id)
     await interaction.response.send_message(
@@ -134,7 +137,53 @@ async def saldo(interaction: discord.Interaction):
     )
 
 # =========================
-# BOTÃO DA LOJA
+# CHECKOUT (NOVA FUNCIONALIDADE)
+# =========================
+
+class CheckoutView(discord.ui.View):
+    def __init__(self, item, price, user_id):
+        super().__init__(timeout=30)
+        self.item = item
+        self.price = price
+        self.user_id = user_id
+
+    @discord.ui.button(label="Confirmar Compra", style=discord.ButtonStyle.green)
+    async def confirm(self, interaction: discord.Interaction, button: discord.ui.Button):
+
+        if interaction.user.id != self.user_id:
+            return await interaction.response.send_message("❌ Esse checkout não é seu.", ephemeral=True)
+
+        coins = get_coins(self.user_id)
+
+        if coins < self.price:
+            return await interaction.response.send_message("❌ Você não tem coins suficientes.", ephemeral=True)
+
+        remove_coins(self.user_id, self.price)
+
+        cursor.execute(
+            "INSERT INTO logs VALUES (?, ?, ?, ?, ?)",
+            (self.user_id, "COMPRA", self.item, self.price, str(datetime.now()))
+        )
+        conn.commit()
+
+        await interaction.response.edit_message(
+            content=f"✅ Compra confirmada!\n\n🏷️ {self.item}\n💰 {self.price} Coins",
+            view=None
+        )
+
+    @discord.ui.button(label="Cancelar", style=discord.ButtonStyle.red)
+    async def cancel(self, interaction: discord.Interaction, button: discord.ui.Button):
+
+        if interaction.user.id != self.user_id:
+            return await interaction.response.send_message("❌ Esse checkout não é seu.", ephemeral=True)
+
+        await interaction.response.edit_message(
+            content="❌ Compra cancelada.",
+            view=None
+        )
+
+# =========================
+# BOTÃO DA LOJA (ATUALIZADO COM CHECKOUT)
 # =========================
 
 class ShopButton(discord.ui.Button):
@@ -148,25 +197,27 @@ class ShopButton(discord.ui.Button):
 
     async def callback(self, interaction: discord.Interaction):
 
-        user_id = interaction.user.id
-        coins = get_coins(user_id)
-
-        if coins < self.price:
-            return await interaction.response.send_message(
-                "❌ Você não tem Staff Coins suficientes.",
-                ephemeral=True
-            )
-
-        remove_coins(user_id, self.price)
-
-        cursor.execute(
-            "INSERT INTO logs VALUES (?, ?, ?, ?, ?)",
-            (user_id, "COMPRA", self.item, self.price, str(datetime.now()))
+        view = CheckoutView(
+            item=self.item,
+            price=self.price,
+            user_id=interaction.user.id
         )
-        conn.commit()
+
+        embed = discord.Embed(
+            title="🧾 CHECKOUT DE COMPRA",
+            description=f"""
+🏷️ **Item:** {self.item}
+💰 **Preço:** {self.price} Coins
+💳 **Seu saldo:** {get_coins(interaction.user.id)}
+
+Deseja confirmar a compra?
+            """,
+            color=discord.Color.orange()
+        )
 
         await interaction.response.send_message(
-            f"✅ Compra realizada!\n\n🏷️ {self.item}\n💰 {self.price} Coins",
+            embed=embed,
+            view=view,
             ephemeral=True
         )
 
@@ -185,10 +236,13 @@ class ShopView(discord.ui.View):
             self.add_item(ShopButton(item, price))
 
 # =========================
-# LOJA (COM BOTÕES)
+# LOJA
 # =========================
 
-@bot.tree.command(name="loja")
+@bot.tree.command(
+    name="loja",
+    description="Abre a loja de itens da staff"
+)
 async def loja(interaction: discord.Interaction):
 
     embed = discord.Embed(
@@ -204,24 +258,29 @@ async def loja(interaction: discord.Interaction):
     )
 
 # =========================
-# COMPRAR (mantido)
+# COMPRAR (MANTIDO)
 # =========================
 
-@bot.tree.command(name="comprar")
-@app_commands.describe(item="Nome do item exatamente como na loja")
+@bot.tree.command(
+    name="comprar",
+    description="Comprar item manualmente"
+)
+@app_commands.describe(
+    item="Nome exato do item"
+)
 async def comprar(interaction: discord.Interaction, item: str):
 
     cursor.execute("SELECT price FROM shop WHERE item=?", (item,))
     result = cursor.fetchone()
 
     if not result:
-        return await interaction.response.send_message("❌ Item não encontrado na loja.", ephemeral=True)
+        return await interaction.response.send_message("❌ Item não encontrado.", ephemeral=True)
 
     price = result[0]
     user_coins = get_coins(interaction.user.id)
 
     if user_coins < price:
-        return await interaction.response.send_message("❌ Você não tem Staff Coins suficientes.", ephemeral=True)
+        return await interaction.response.send_message("❌ Sem coins suficientes.", ephemeral=True)
 
     remove_coins(interaction.user.id, price)
 
@@ -232,7 +291,7 @@ async def comprar(interaction: discord.Interaction, item: str):
     conn.commit()
 
     await interaction.response.send_message(
-        f"✅ Compra realizada!\n\n🏷️ Item: {item}\n💰 Preço: {price} Coins\n\nAguarde entrega manual da staff.",
+        f"✅ Compra realizada!\n🏷️ {item}\n💰 {price}",
         ephemeral=True
     )
 
@@ -240,7 +299,10 @@ async def comprar(interaction: discord.Interaction, item: str):
 # ADD MOEDAS
 # =========================
 
-@bot.tree.command(name="addmoedas")
+@bot.tree.command(
+    name="addmoedas",
+    description="Adicionar coins"
+)
 async def addmoedas(interaction: discord.Interaction, member: discord.Member, amount: int):
 
     if not is_admin(interaction):
@@ -257,7 +319,10 @@ async def addmoedas(interaction: discord.Interaction, member: discord.Member, am
 # REMOVE MOEDAS
 # =========================
 
-@bot.tree.command(name="removemoedas")
+@bot.tree.command(
+    name="removemoedas",
+    description="Remover coins"
+)
 async def removemoedas(interaction: discord.Interaction, member: discord.Member, amount: int):
 
     if not is_admin(interaction):
@@ -274,7 +339,10 @@ async def removemoedas(interaction: discord.Interaction, member: discord.Member,
 # LOGS
 # =========================
 
-@bot.tree.command(name="logs")
+@bot.tree.command(
+    name="logs",
+    description="Ver últimas compras"
+)
 async def logs(interaction: discord.Interaction):
 
     if not interaction.user.guild_permissions.administrator:
@@ -290,7 +358,7 @@ async def logs(interaction: discord.Interaction):
 
     for user_id, item, price, time in data:
         user = await bot.fetch_user(user_id)
-        msg += f"👤 {user.name}\n🏷️ {item} - {price} Coins\n🕒 {time}\n\n"
+        msg += f"👤 {user.name}\n🏷️ {item} - {price}\n🕒 {time}\n\n"
 
     await interaction.response.send_message(msg, ephemeral=True)
 
