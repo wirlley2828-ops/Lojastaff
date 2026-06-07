@@ -120,6 +120,11 @@ async def on_ready():
     await bot.tree.sync()
     print(f"✅ Bot online como {bot.user}")
 
+
+intents = discord.Intents.default()
+intents.members = True
+intents.message_content = True
+
 # =========================
 # SALDO
 # =========================
