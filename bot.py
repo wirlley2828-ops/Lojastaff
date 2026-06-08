@@ -135,6 +135,31 @@ async def on_ready():
 # SALDO
 # =========================
 
+
+
+
+@bot.tree.command(name="logs", description="Ver logs de compras")
+async def logs(interaction: discord.Interaction):
+
+    is_owner_role = any(role.name == "Dono" for role in interaction.user.roles)
+
+    if not interaction.user.guild_permissions.administrator and not is_owner_role:
+        return await interaction.response.send_message("❌ Sem permissão.", ephemeral=True)
+
+    cursor.execute("SELECT user_id, item, price, time FROM logs ORDER BY time DESC LIMIT 10")
+    data = cursor.fetchall()
+
+    if not data:
+        return await interaction.response.send_message("📭 Nenhum log encontrado.")
+
+    msg = "📜 **LOGS DE COMPRAS**\n\n"
+
+    for user_id, item, price, time in data:
+        msg += f"👤 <@{user_id}> comprou **{item}** por {price} coins\n🕒 {time}\n\n"
+
+    # público pra todos verem
+    await interaction.response.send_message(msg)
+
 @bot.tree.command(name="saldo", description="Ver suas coins")
 async def saldo(interaction: discord.Interaction):
     coins = get_coins(interaction.user.id)
@@ -250,6 +275,8 @@ async def loja(interaction: discord.Interaction):
         embed=embed,
         view=ShopView()
     )
+
+
 
 # =========================
 # ADD MOEDAS
