@@ -3,6 +3,8 @@ import threading
 from http.server import HTTPServer, BaseHTTPRequestHandler
 from datetime import datetime
 import sqlite3
+import traceback
+import sys
 
 import discord
 from discord import app_commands
@@ -20,8 +22,16 @@ class Handler(BaseHTTPRequestHandler):
         self.end_headers()
         self.wfile.write(b"Bot online!")
 
+    def do_HEAD(self):
+        self.send_response(200)
+        self.send_header("Content-type", "text/plain")
+        self.end_headers()
+        return
+
+
 def run_web():
-    port = int(os.environ.get("PORT"))
+    # FIX: fallback da porta (evita crash no Render)
+    port = int(os.environ.get("PORT", 10000))
     server = HTTPServer(("0.0.0.0", port), Handler)
     server.serve_forever()
 
@@ -175,4 +185,111 @@ class CheckoutView(discord.ui.View):
     async def cancel(self, interaction: discord.Interaction, button: discord.ui.Button):
 
         if interaction.user.id != self.user_id:
-            return await interaction.response.send_message
+            return await interaction.response.send_message("❌ Não é seu checkout.", ephemeral=True)
+
+        await interaction.response.edit_message(
+            content="❌ Compra cancelada.",
+            view=None
+        )
+
+# =========================
+# LOJA
+# =========================
+
+class ShopButton(discord.ui.Button):
+    def __init__(self, item, price):
+        super().__init__(
+            label=f"{item} - {price}",
+            style=discord.ButtonStyle.green
+        )
+        self.item = item
+        self.price = price
+
+    async def callback(self, interaction: discord.Interaction):
+
+        view = CheckoutView(self.item, self.price, interaction.user.id)
+
+        embed = discord.Embed(
+            title="🧾 CHECKOUT",
+            description=f"""
+🏷️ **Item:** {self.item}
+💰 **Preço:** {self.price}
+🪙 **Seu saldo:** {get_coins(interaction.user.id)}
+
+Deseja confirmar a compra?
+            """,
+            color=discord.Color.orange()
+        )
+
+        await interaction.response.send_message(
+            embed=embed,
+            view=view,
+            ephemeral=True
+        )
+
+class ShopView(discord.ui.View):
+    def __init__(self):
+        super().__init__(timeout=None)
+
+        cursor.execute("SELECT item, price FROM shop")
+        items = cursor.fetchall()
+
+        for item, price in items:
+            self.add_item(ShopButton(item, price))
+
+@bot.tree.command(name="loja", description="Abrir loja staff")
+async def loja(interaction: discord.Interaction):
+
+    embed = discord.Embed(
+        title="🛒 LOJA STAFF",
+        description="Clique nos botões abaixo para comprar itens.",
+        color=discord.Color.green()
+    )
+
+    await interaction.response.send_message(
+        embed=embed,
+        view=ShopView()
+    )
+
+# =========================
+# ADD MOEDAS
+# =========================
+
+@bot.tree.command(name="addmoedas", description="Adicionar coins")
+async def addmoedas(interaction: discord.Interaction, member: discord.Member, amount: int):
+
+    if not is_admin(interaction):
+        return await interaction.response.send_message("❌ Sem permissão.")
+
+    add_coins(member.id, amount)
+
+    await interaction.response.send_message(
+        f"✅ {amount} moedas adicionadas para {member.mention}"
+    )
+
+# =========================
+# REMOVE MOEDAS
+# =========================
+
+@bot.tree.command(name="removemoedas", description="Remover coins")
+async def removemoedas(interaction: discord.Interaction, member: discord.Member, amount: int):
+
+    if not is_admin(interaction):
+        return await interaction.response.send_message("❌ Sem permissão.")
+
+    remove_coins(member.id, amount)
+
+    await interaction.response.send_message(
+        f"🗑️ {amount} moedas removidas de {member.mention}"
+    )
+
+# =========================
+# START BOT (DEBUG FIX)
+# =========================
+
+try:
+    bot.run(TOKEN)
+except Exception:
+    print("❌ ERRO AO INICIAR O BOT:")
+    traceback.print_exc()
+    sys.exit(1)
