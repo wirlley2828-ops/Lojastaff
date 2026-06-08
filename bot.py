@@ -232,4 +232,4 @@ class ShopView(discord.ui.View):
 async def loja(interaction: discord.Interaction):
 
     embed = discord.Embed(
-        title="🛒 LOJA
+        title="🛒 LOJA"
