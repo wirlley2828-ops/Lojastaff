@@ -167,7 +167,6 @@ class CheckoutView(discord.ui.View):
             view=None
         )
 
-        # LOG PÚBLICO
         await interaction.channel.send(
             f"🛒 {interaction.user.mention} comprou **{self.item}** por {self.price} coins!"
         )
@@ -176,61 +175,4 @@ class CheckoutView(discord.ui.View):
     async def cancel(self, interaction: discord.Interaction, button: discord.ui.Button):
 
         if interaction.user.id != self.user_id:
-            return await interaction.response.send_message("❌ Não é seu checkout.", ephemeral=True)
-
-        await interaction.response.edit_message(
-            content="❌ Compra cancelada.",
-            view=None
-        )
-
-# =========================
-# LOJA
-# =========================
-
-class ShopButton(discord.ui.Button):
-    def __init__(self, item, price):
-        super().__init__(
-            label=f"{item} - {price}",
-            style=discord.ButtonStyle.green
-        )
-        self.item = item
-        self.price = price
-
-    async def callback(self, interaction: discord.Interaction):
-
-        view = CheckoutView(self.item, self.price, interaction.user.id)
-
-        embed = discord.Embed(
-            title="🧾 CHECKOUT",
-            description=f"""
-🏷️ **Item:** {self.item}
-💰 **Preço:** {self.price}
-🪙 **Seu saldo:** {get_coins(interaction.user.id)}
-
-Deseja confirmar a compra?
-            """,
-            color=discord.Color.orange()
-        )
-
-        await interaction.response.send_message(
-            embed=embed,
-            view=view,
-            ephemeral=True
-        )
-
-class ShopView(discord.ui.View):
-    def __init__(self):
-        super().__init__(timeout=None)
-
-        cursor.execute("SELECT item, price FROM shop")
-        items = cursor.fetchall()
-
-        for item, price in items:
-            self.add_item(ShopButton(item, price))
-
-@bot.tree.command(name="loja", description="Abrir loja staff")
-async def loja(interaction: discord.Interaction):
-
-    embed = discord.Embed(
-        title="🛒 LOJA"
-    )
+            return await interaction.response.send_message
