@@ -12,10 +12,11 @@ from discord.ext import commands
 import discord.ui
 
 # =========================
-# HTTP SERVER (Render)
+# HTTP SERVER (Render FIX)
 # =========================
 
 class Handler(BaseHTTPRequestHandler):
+
     def do_GET(self):
         self.send_response(200)
         self.send_header("Content-type", "text/plain")
@@ -26,11 +27,9 @@ class Handler(BaseHTTPRequestHandler):
         self.send_response(200)
         self.send_header("Content-type", "text/plain")
         self.end_headers()
-        return
-
 
 def run_web():
-    # FIX: fallback da porta (evita crash no Render)
+    # FIX: fallback de porta evita crash
     port = int(os.environ.get("PORT", 10000))
     server = HTTPServer(("0.0.0.0", port), Handler)
     server.serve_forever()
@@ -42,6 +41,10 @@ threading.Thread(target=run_web, daemon=True).start()
 # =========================
 
 TOKEN = os.getenv("TOKEN")
+
+if not TOKEN:
+    print("❌ TOKEN não configurado no ambiente!")
+    sys.exit(1)
 
 intents = discord.Intents.default()
 intents.members = True
@@ -134,31 +137,6 @@ async def on_ready():
 # =========================
 # SALDO
 # =========================
-
-
-
-
-@bot.tree.command(name="logs", description="Ver logs de compras")
-async def logs(interaction: discord.Interaction):
-
-    is_owner_role = any(role.name == "Dono" for role in interaction.user.roles)
-
-    if not interaction.user.guild_permissions.administrator and not is_owner_role:
-        return await interaction.response.send_message("❌ Sem permissão.", ephemeral=True)
-
-    cursor.execute("SELECT user_id, item, price, time FROM logs ORDER BY time DESC LIMIT 10")
-    data = cursor.fetchall()
-
-    if not data:
-        return await interaction.response.send_message("📭 Nenhum log encontrado.")
-
-    msg = "📜 **LOGS DE COMPRAS**\n\n"
-
-    for user_id, item, price, time in data:
-        msg += f"👤 <@{user_id}> comprou **{item}** por {price} coins\n🕒 {time}\n\n"
-
-    # público pra todos verem
-    await interaction.response.send_message(msg)
 
 @bot.tree.command(name="saldo", description="Ver suas coins")
 async def saldo(interaction: discord.Interaction):
@@ -276,8 +254,6 @@ async def loja(interaction: discord.Interaction):
         view=ShopView()
     )
 
-
-
 # =========================
 # ADD MOEDAS
 # =========================
@@ -311,12 +287,37 @@ async def removemoedas(interaction: discord.Interaction, member: discord.Member,
     )
 
 # =========================
-# START BOT (DEBUG FIX)
+# LOGS
+# =========================
+
+@bot.tree.command(name="logs", description="Ver logs de compras")
+async def logs(interaction: discord.Interaction):
+
+    is_owner_role = any(role.name == "Dono" for role in interaction.user.roles)
+
+    if not interaction.user.guild_permissions.administrator and not is_owner_role:
+        return await interaction.response.send_message("❌ Sem permissão.", ephemeral=True)
+
+    cursor.execute("SELECT user_id, item, price, time FROM logs ORDER BY time DESC LIMIT 10")
+    data = cursor.fetchall()
+
+    if not data:
+        return await interaction.response.send_message("📭 Nenhum log encontrado.")
+
+    msg = "📜 **LOGS DE COMPRAS**\n\n"
+
+    for user_id, item, price, time in data:
+        msg += f"👤 <@{user_id}> comprou **{item}** por {price} coins\n🕒 {time}\n\n"
+
+    await interaction.response.send_message(msg)
+
+# =========================
+# SAFE START (DEBUG)
 # =========================
 
 try:
     bot.run(TOKEN)
 except Exception:
-    print("❌ ERRO AO INICIAR O BOT:")
+    print("❌ ERRO AO INICIAR BOT:")
     traceback.print_exc()
     sys.exit(1)
